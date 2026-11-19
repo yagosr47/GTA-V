@@ -29,7 +29,7 @@ export class TrafficAndWantedSystem {
     for (let n = 0; n < (mobile ? 14 : 30); n++)
       this.people.push(new NPC(city.s, city.walk, n % 8 === 5, keys[n]));
     for (let [x, z, col, cop] of [
-      [2.5, 15, "#ab385e", false],
+      [6.75, 15, "#ab385e", false],
       [-4, -22, "#43798b", false],
       [4, -59, "#c67d49", false],
       [-49, -5, "#37475a", true],
@@ -62,7 +62,7 @@ export class TrafficAndWantedSystem {
           n.hp = 60;
         }
       }
-      n.step(p, this.stars, dt, this.city.solid);
+      n.step(p, this.stars, dt, this.city.solid, this.cars);
     }
     for (let car of this.cars) {
       car.alert = car.police && this.stars > 0;

@@ -23,7 +23,7 @@ export class HUD {
   ) {
     this.el.className = "hud";
     document.body.append(this.el);
-    this.el.innerHTML = `<header><div class="brand"><i class="sunbadge"></i><div><strong>NIGHTFALL<span> CITY</span></strong><small>OPEN WORLD SIMULATOR</small></div></div><div class="topright"><b class="live">● &nbsp; LIVE SESSION</b><button id="touchBtn" title="Controles táteis">${pad}</button><button id="pauseBtn" title="Pausar">${pause}</button></div></header><section class="mission"><small><em></em> MISSION FEED</small><h2 id="missionName"></h2><div id="objective"></div></section><div class="stats"><div class="stars" id="stars"></div><div class="money" id="money"></div></div><div class="reticle"></div><section class="nav"><div class="location"><i>⌖</i><div><small>LOS SANTOS &nbsp;/&nbsp; SECTOR 01</small><h2>Vespucci Blvd</h2></div></div><div class="radar"><canvas width="272" height="150"></canvas><b>N</b><span>GPS &nbsp;●</span></div><div class="vitals"><div>✚ <i><u id="hp"></u></i></div><div>⬟ <i><u id="armor"></u></i></div></div></section><section class="loadout"><small><em></em> EQUIPMENT &nbsp;/&nbsp; <b id="slot"></b></small><button id="gun" title="Trocar arma"><svg viewBox="0 0 90 45"><path fill="currentColor" d="M7 8h68v3h5v8H44l-4 10H29l-4 13-16-3 8-20H7z M32 20l-2 6h8l3-6z" fill-rule="evenodd"/><path stroke="#555063" stroke-width="2" d="M15 10l-2 7m7-7-2 7m7-7-2 7"/></svg><span><b id="weapon"></b><strong id="ammo"></strong></span></button></section><div class="prompt" id="prompt"></div><footer><span><i></i> FREEROAM <b>/</b> <label id="time"></label></span><div><kbd>W A S D</kbd> Mover &nbsp; <kbd>SHIFT</kbd> Correr &nbsp; <kbd>F</kbd> Interagir &nbsp; <kbd>?</kbd> Controles</div><span class="build">NF—OS <b>//</b> V.1.0</span></footer><dialog><small>SESSION MENU</small><h1>Jogo pausado</h1><p>WASD · Mover ou dirigir<br>Shift · Correr　 Espaço · Pular / drift<br>F · Entrar ou sair do veículo<br>Clique na cidade · Capturar mouse<br>Mouse esquerdo · Atirar　 Direito · Mirar<br>Q / scroll · Trocar arma　 R · Recarregar<br>Esc · Liberar mouse</p><button id="resume">Continuar partida →</button></dialog>`;
+    this.el.innerHTML = `<header><div class="brand"><i class="sunbadge"></i><div><strong>NIGHTFALL<span> CITY</span></strong><small>OPEN WORLD SIMULATOR</small></div></div><div class="topright"><b class="live">● &nbsp; LIVE SESSION</b><button id="touchBtn" title="Controles táteis">${pad}</button><button id="pauseBtn" title="Pausar">${pause}</button></div></header><section class="mission"><small><em></em> MISSION FEED</small><h2 id="missionName"></h2><div id="objective"></div></section><div class="stats"><div class="stars" id="stars"></div><div class="money" id="money"></div></div><div class="reticle"></div><section class="nav"><div class="location"><i>⌖</i><div><small>LOS SANTOS &nbsp;/&nbsp; SECTOR 01</small><h2>Vespucci Blvd</h2></div></div><div class="radar"><canvas width="272" height="150"></canvas><b>N</b><span>GPS &nbsp;●</span></div><div class="vitals"><div>✚ <i><u id="hp"></u></i></div><div>⬟ <i><u id="armor"></u></i></div></div></section><section class="loadout"><small><em></em> EQUIPMENT &nbsp;/&nbsp; <b id="slot"></b></small><button id="gun" title="Trocar arma"><svg viewBox="0 0 90 45"><path fill="currentColor" d="M7 8h68v3h5v8H44l-4 10H29l-4 13-16-3 8-20H7z M32 20l-2 6h8l3-6z" fill-rule="evenodd"/><path stroke="#555063" stroke-width="2" d="M15 10l-2 7m7-7-2 7m7-7-2 7"/></svg><span><b id="weapon"></b><strong id="ammo"></strong></span></button></section><div class="prompt" id="prompt"></div><footer><span><i></i> FREEROAM <b>/</b> <label id="time"></label></span><div><kbd>W A S D</kbd> Mover &nbsp; <kbd>SHIFT</kbd> Correr &nbsp; <kbd>F</kbd> Interagir &nbsp; <kbd>?</kbd> Controles</div><span class="build">NF—OS <b>//</b> V.1.0</span></footer><dialog><small>SESSION MENU</small><h1>Jogo pausado</h1><p>WASD ou setas · Mover ou dirigir<br>Shift · Correr　 Espaço · Pular / drift<br>F · Entrar ou sair do veículo<br>Clique na cidade · Capturar mouse<br>Mouse esquerdo · Atirar　 Direito · Mirar<br>Q / scroll · Trocar arma　 R · Recarregar<br>Esc · Liberar mouse</p><button id="resume">Continuar partida →</button></dialog>`;
     this.map = this.el.querySelector("canvas")!;
     this.ctx = this.map.getContext("2d")!;
     this.get("touchBtn").onclick = () => tc.toggle();
@@ -98,14 +98,28 @@ export class HUD {
     for (let x = -4; x < 4; x++)
       for (let z = -4; z < 4; z++) {
         c.fillStyle = "#4c485b";
-        c.fillRect(x * 52 + 4, z * 52 + 4, 44, 44);
+        c.fillRect(x * 52 + 8.5, z * 52 + 8.5, 35, 35);
         c.strokeStyle = "#797083";
         c.lineWidth = 0.6;
-        c.strokeRect(x * 52 + 4, z * 52 + 4, 44, 44);
+        c.strokeRect(x * 52 + 8.5, z * 52 + 8.5, 35, 35);
         c.fillStyle = "#373545";
-        c.fillRect(x * 52 + 9, z * 52 + 10, 17, 28);
-        c.fillRect(x * 52 + 29, z * 52 + 12, 12, 21);
+        for (let dx of [11, 28])
+          for (let dz of [11, 28]) {
+            const park =
+              dx === 11 &&
+              dz === 11 &&
+              ((x === 0 && z === 0) || (x === -1 && z === -2));
+            c.fillStyle = park ? "#426759" : "#373545";
+            c.fillRect(x * 52 + dx, z * 52 + dz, 13, 13);
+          }
       }
+    for (const v of t.cars) {
+      if (v === p.car) continue;
+      c.fillStyle = v.police ? "#86aecb" : "#b09aaf";
+      c.beginPath();
+      c.arc(v.body.position.x, v.body.position.z, 1.55, 0, Math.PI * 2);
+      c.fill();
+    }
     let [x, z] = m.target;
     c.strokeStyle = "#f7ab66";
     c.lineWidth = 2;

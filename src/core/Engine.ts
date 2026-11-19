@@ -126,7 +126,7 @@ export class Engine {
       Math.abs(p.pos.z) > 222
     ) {
       if (p.car) p.exit();
-      p.body.position.set(-2, 1, 20);
+      p.body.position.set(3, 1, 20);
       p.body.velocity.setZero();
       p.health = 100;
       p.armor = 75;

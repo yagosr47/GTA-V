@@ -10,10 +10,11 @@ import {
   grain,
   facade,
 } from "../utils/TextureGenerator";
+import { sidewalks, inLot, WALK } from "./StreetLayout";
 export class CityGenerator {
   solid: T.Object3D[] = [];
   roads = new Map<string, string[]>();
-  walk = new Map<string, string[]>();
+  walk = sidewalks();
   sun = new T.Group();
   sky!: T.Mesh<T.SphereGeometry, T.ShaderMaterial>;
   constructor(
@@ -29,7 +30,19 @@ export class CityGenerator {
       white = lit("#aea0a9"),
       steel = mat("#392e45"),
       grass = mat("#173d40");
-    let asphalt = grain("#514656");
+    let asphalt = grain("#42414c");
+    const paving = tex(128, 128, (c) => {
+      c.fillStyle = "#978697";
+      c.fillRect(0, 0, 128, 128);
+      c.strokeStyle = "#867987";
+      for (let j = 0; j < 4; j++)
+        for (let i = -1; i < 4; i++)
+          c.strokeRect(i * 48 + (j % 2) * 24, j * 32, 48, 32);
+    });
+    paving.wrapS = paving.wrapT = T.RepeatWrapping;
+    paving.repeat.set(8, 8);
+    curb.map = paving;
+    curb.color.set("#f8e7db");
     box(
       g,
       0,
@@ -54,10 +67,7 @@ export class CityGenerator {
       for (let j = -4; j < 4; j++) {
         let x = i * 52 + 26,
           z = j * 52 + 26;
-        for (let [graph, off] of [
-          [this.roads, 0],
-          [this.walk, 10],
-        ] as const) {
+        for (let [graph, off] of [[this.roads, 0]] as const) {
           let k = `${i * 52 + off},${j * 52 + off}`;
           graph.set(
             k,
@@ -75,8 +85,20 @@ export class CityGenerator {
           );
         }
         box(g, x, 0.1, z, 35, 0.25, 35, curb);
+        // Two landscaped corner plazas interrupt the continuous wall of towers.
+        const plaza = (i === 0 && j === 0) || (i === -1 && j === -2);
+        if (plaza) {
+          box(g, x - 7, 0.33, z - 7, 13, 0.3, 13, grass);
+          for (let a of [-11, -4]) this.palm(g, x + a, z - 8, steel, grass);
+          for (let n of [-10, -4]) {
+            box(g, x + n, 0.59, z - 0.15, 2.8, 0.15, 0.68, steel);
+            box(g, x + n, 0.43, z - 0.15, 1.8, 0.3, 0.4, curb);
+            box(g, x + n, 0.91, z + 0.13, 2.8, 0.53, 0.12, steel);
+          }
+        }
         for (let a of [-8, 8])
           for (let b of [-8, 8]) {
+            if (plaza && a === -8 && b === -8) continue;
             let h =
                 6 +
                 rand() ** 1.5 *
@@ -89,6 +111,10 @@ export class CityGenerator {
             let m = faces[Math.floor(rand() * 8)];
             let o = box(g, x + a, h / 2 + 0.24, z + b, w, h, d, m);
             this.solid.push(o);
+            if ((i + j) % 3 === 0) {
+              for (let level = 4; level < h - 1; level += 4.8)
+                box(g, x + a, level, z + b, w + 0.24, 0.16, d + 0.24, curb);
+            }
             this.collider(x + a, h / 2, z + b, w, h + 0.5, d);
             box(
               g,
@@ -108,14 +134,33 @@ export class CityGenerator {
             box(g, x + n, 0.018, j * 52 + l, 3.1, 0.025, 0.11, stripe);
           }
         }
-        for (let n = -6; n <= 6; n += 1.6) {
-          box(g, i * 52 + n, 0.025, j * 52 - 8, 0.72, 0.02, 2, white);
-          box(g, i * 52 - 8, 0.025, j * 52 + n, 2, 0.02, 0.72, white);
-        }
-        box(g, i * 52 + 8.2, 2.8, z, 0.14, 5.6, 0.14, steel);
-        box(g, i * 52 + 7.35, 5.6, z, 1.8, 0.13, 0.32, cyan);
+        for (let n = -7; n <= 7; n += 1.6)
+          for (let side of [-1, 1]) {
+            box(
+              g,
+              i * 52 + n,
+              0.025,
+              j * 52 + side * WALK,
+              0.72,
+              0.02,
+              2,
+              white,
+            );
+            box(
+              g,
+              i * 52 + side * WALK,
+              0.025,
+              j * 52 + n,
+              2,
+              0.02,
+              0.72,
+              white,
+            );
+          }
+        box(g, i * 52 + 10.2, 2.8, z, 0.14, 5.6, 0.14, steel);
+        box(g, i * 52 + 9.95, 5.6, z, 0.72, 0.13, 0.32, cyan);
         if (i === -1 || i === 0 || rand() < 0.25)
-          this.palm(g, i * 52 + (i === -1 ? 43 : 8.9), z - 9, steel, grass);
+          this.palm(g, i * 52 + (i === -1 ? 40.7 : 11.3), z - 9, steel, grass);
       }
     for (let [x, z, label, col] of [
       [-10, -16, "MOTEL", "#ff52b1"],
@@ -137,10 +182,10 @@ export class CityGenerator {
       box(g, x, 8, z, 2.3, 7, 0.42, new T.MeshBasicMaterial({ map: t }));
     }
     for (let [x, z] of [
-      [-8.8, 2],
-      [8.8, 0],
-      [-8.8, -29],
-      [8.8, -38],
+      [-11.5, 12],
+      [11.5, 12],
+      [-11.5, -29],
+      [11.5, -38],
     ])
       this.palm(g, x, z, steel, grass);
     // Shop fronts line the near boulevard; a single atlas supplies the illuminated lettering.
@@ -158,6 +203,7 @@ export class CityGenerator {
           let z = j * 52 + 26 + b,
             x = side * 10.8,
             accent = side < 0 ? pink : cyan;
+          if (side === 1 && j === 0 && b === -8) continue;
           let name = shopNames[Math.floor(rand() * shopNames.length)];
           let sign = tex(512, 80, (c) => {
             c.fillStyle = "#2b2037";
@@ -198,6 +244,35 @@ export class CityGenerator {
           box(g, x - side * 0.9, 4.2, z, 0.7, 0.12, 12.4, accent);
           box(g, x - side * 0.9, 2.83, z, 0.75, 0.1, 12.4, accent);
         }
+    // Corner cinema: a stepped parapet and illuminated reader board face the intersection.
+    const mx = -18,
+      mz = -11;
+    box(g, mx, 4.7, mz, 13, 1.8, 1.6, steel);
+    for (let side of [-1, 1]) {
+      box(g, mx + side * 6.1, 3.2, mz, 0.42, 6.4, 1, curb);
+      box(g, mx + side * 6.1, 3.4, mz + 0.53, 0.09, 6, 0.06, pink);
+    }
+    for (let h of [3.76, 5.57]) box(g, mx, h, mz, 13.35, 0.12, 1.86, pink);
+    const marquee = tex(640, 96, (c) => {
+      c.fillStyle = "#ffe8b6";
+      c.fillRect(0, 0, 640, 96);
+      c.fillStyle = "#763458";
+      c.textAlign = "center";
+      c.font = "bold 48px sans-serif";
+      c.fillText("L U X   C I N E M A", 320, 49);
+      c.font = "bold 21px monospace";
+      c.fillText("TONIGHT   •   DOUBLE FEATURE", 320, 81);
+    });
+    box(
+      g,
+      mx,
+      4.66,
+      mz + 0.82,
+      12.5,
+      1.5,
+      0.04,
+      new T.MeshBasicMaterial({ map: marquee }),
+    );
     // Batch static scenery while retaining individual boxes for camera queries.
     g.updateMatrixWorld(true);
     let groups = new Map<T.Material, T.BufferGeometry[]>();
@@ -273,10 +348,58 @@ export class CityGenerator {
       }),
     );
     sky.add(points);
+    // Distant ridges live outside the playable grid and never create collision bodies.
+    for (let band = 0; band < 2; band++) {
+      const verts: number[] = [];
+      const height = (k: number) =>
+        7 +
+        Math.abs(Math.sin(k * 0.49 + band) * Math.cos(k * 0.21)) *
+          (band ? 17 : 30);
+      for (let k = -38; k < 39; k++) {
+        let x = k * 7,
+          z = -285 - band * 18,
+          a = height(k),
+          b = height(k + 1);
+        verts.push(
+          x,
+          -6,
+          z,
+          x + 7,
+          -6,
+          z,
+          x + 7,
+          b,
+          z,
+          x,
+          -6,
+          z,
+          x + 7,
+          b,
+          z,
+          x,
+          a,
+          z,
+        );
+      }
+      let geo = new T.BufferGeometry();
+      geo.setAttribute("position", new T.Float32BufferAttribute(verts, 3));
+      s.add(
+        new T.Mesh(
+          geo,
+          new T.MeshBasicMaterial({
+            color: band ? "#ad8191" : "#956b85",
+            fog: false,
+          }),
+        ),
+      );
+    }
   }
   collider(x: number, y: number, z: number, w: number, h: number, d: number) {
+    if (y >= 0 && !inLot(x, z, w, d))
+      throw new Error("Colisor estático invade a pista");
     let b = new C.Body({
       mass: 0,
+      material: this.world.defaultMaterial,
       shape: new C.Box(new C.Vec3(w / 2, h / 2, d / 2)),
       position: new C.Vec3(x, y, z),
     });
