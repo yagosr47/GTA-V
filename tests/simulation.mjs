@@ -101,8 +101,123 @@ try {
   assert(ped.model.g.position.x < 9.45);
   ped.step(p, 1, 1 / 60, city.solid, []);
   assert.equal(ped.state, "panic");
+  const { LaneDriver } = await vite.ssrLoadModule("/src/systems/LaneDriver.ts");
+  const { Vehicle } = await vite.ssrLoadModule("/src/entities/Vehicle.ts");
+  const { vitality } = await vite.ssrLoadModule("/src/entities/Vitality.ts");
+  for (const [level, values] of [
+    [0, [100]],
+    [1, [99, 80]],
+    [2, [79, 60]],
+    [3, [59, 40]],
+    [4, [39, 20]],
+    [5, [19, 1]],
+    [6, [0]],
+  ])
+    for (const v of values) assert.equal(vitality(v).level, level);
+  const laneWorld = new C.World({
+      allowSleep: true,
+      gravity: new C.Vec3(0, -18, 0),
+    }),
+    floor = new C.Body({ shape: new C.Box(new C.Vec3(160, 1, 160)) });
+  floor.position.y = -1;
+  laneWorld.addBody(floor);
+  const vehicle = new Vehicle(laneWorld, scene, 0, 0, "#d86");
+  const driver = new LaneDriver(
+      [
+        [0, 52],
+        [0, 0],
+        [52, 0],
+        [52, 52],
+      ],
+      vehicle,
+    ),
+    locks = new Map();
+  const drive = (frames, clock, peds = []) => {
+    for (let f = 0; f < frames; f++) {
+      driver.step(1 / 60, clock, [vehicle], peds, locks);
+      laneWorld.step(1 / 60);
+    }
+  };
+  drive(480, 12);
+  assert(
+    vehicle.body.position.z > 12 && vehicle.body.position.z < 16,
+    "red: stop before crossing",
+  );
+  assert(vehicle.body.velocity.length() < 0.4);
+  assert(Math.abs(vehicle.body.position.x - 3.5) < 0.5, "right-hand lane");
+  ped.reset("9.45,9.45");
+  ped.next = "-9.45,9.45";
+  ped.crossing = true;
+  drive(150, 2, [ped]);
+  assert(
+    vehicle.body.position.z > 12,
+    "green still yields to waiting pedestrian",
+  );
+  const leader = new Vehicle(laneWorld, scene, 3.5, 9, "#458");
+  leader.drive(0, 0, 1, false);
+  for (let i = 0; i < 180; i++) {
+    driver.step(1 / 60, 2, [vehicle, leader], [], locks);
+    laneWorld.step(1 / 60);
+    assert(
+      vehicle.body.position.distanceTo(leader.body.position) > 4.8,
+      "following distance prevents rear-end contact",
+    );
+  }
+  leader.body.position.set(90, 1, 90);
+  leader.body.aabbNeedsUpdate = true;
+  drive(660, 2);
+  assert(driver.index !== 1, "clear crossing releases traffic");
+  const pos = vehicle.body.position;
+  ped.model.g.position.set(pos.x, 0.24, pos.z);
+  vehicle.body.velocity.set(6, 0, 0);
+  assert(ped.impact(vehicle, laneWorld, true));
+  assert(!ped.impact(vehicle, laneWorld, true));
+  assert.equal(ped.hp, 67);
+  ped.hurt(200, true);
+  assert.equal(ped.hp, 0);
+  assert(ped.playerKill);
+  const { MissionSystem } = await vite.ssrLoadModule(
+    "/src/systems/MissionSystem.ts",
+  );
+  const mission = new MissionSystem(scene);
+  mission.index = 1;
+  p.body.position.set(3, 1, -45);
+  mission.step(p, [], 1 / 60);
+  assert(!mission.active, "no target must not start a broken mission");
+  ped.reset(node);
+  p.body.position.x = 12;
+  mission.step(p, [ped], 5);
+  p.body.position.x = 3;
+  mission.step(p, [ped], 1 / 60);
+  assert(ped.pinned);
+  ped.hurt(100, true);
+  mission.step(p, [ped], 1 / 60);
+  assert.equal(mission.cash, 2950);
+  assert(!ped.pinned);
+  mission.step(p, [ped], 5);
+  assert(!mission.active, "must exit trigger to restart");
+  assert.equal(mission.cash, 2950);
+  const race = new MissionSystem(scene);
+  race.index = 2;
+  race.step(p, [], 1 / 60);
+  assert(race.active);
+  p.enter(vehicle);
+  for (let n = 0; n < 3; n++) {
+    let [x, z] = race.target;
+    vehicle.body.position.set(x, 1, z);
+    race.step(p, [], 1 / 60);
+  }
+  assert.equal(race.cash, 2950);
+  assert(!race.active);
+  p.exit();
+  const timed = new MissionSystem(scene);
+  p.body.position.set(3, 1, -45);
+  timed.step(p, [], 1 / 60);
+  timed.step(p, [], 91);
+  assert(!timed.active);
+  assert.equal(timed.cash, 2450);
   console.log(
-    "OK: centered high/low orbit (landscape and portrait), idle → walking, strafing, jumping, road clearance, sidewalk links, yielding and panic",
+    "OK: lane driving, traffic priority, health bands, impacts, mission lifecycle, centered high/low orbit (landscape and portrait), idle → walking, strafing, jumping, road clearance, sidewalk links, yielding and panic",
   );
 } finally {
   await vite.close();

@@ -216,6 +216,36 @@ export function person(coat: string, variant = 0, cop = false) {
     for (let side of [-1, 1])
       form(g, side * 0.093, 1.866, 0.12, 0.17, 0.2, 0.149, hair, true);
   }
+  // Garment details are batched with the torso, not drawn as separate actors.
+  if (!variant || cop) {
+    for (let side of [-1, 1]) {
+      box(g, side * 0.148, 1.34, -0.174, 0.125, 0.063, 0.02, jacket);
+      box(g, side * 0.148, 1.37, -0.189, 0.13, 0.024, 0.009, seam);
+      form(g, side * 0.148, 1.364, -0.196, 0.015, 0.015, 0.008, accent, true);
+    }
+  }
+  if (variant % 4 === 2) {
+    for (let side of [-1, 1]) {
+      form(g, side * 0.071, 1.795, -0.153, 0.123, 0.058, 0.023, rib, true);
+      box(g, side * 0.138, 1.8, -0.079, 0.015, 0.016, 0.137, rib);
+    }
+    box(g, 0, 1.798, -0.157, 0.052, 0.012, 0.013, accent);
+  }
+  if (!variant || variant % 4 === 3) {
+    for (let j = 0; j < 7; j++)
+      form(
+        g,
+        (j - 3) * 0.028,
+        1.662 + Math.abs(j - 3) * 0.009,
+        -0.119,
+        0.034,
+        0.036,
+        0.014,
+        hair,
+        true,
+      );
+  }
+  const hinges: T.Group[] = [];
   const limbs: T.Group[] = [];
   for (let k = 0; k < 4; k++) {
     let arm = k > 1,
@@ -224,6 +254,11 @@ export function person(coat: string, variant = 0, cop = false) {
     g.add(j);
     j.position.set(s * (arm ? 0.326 : 0.145), arm ? 1.46 : 0.93, 0);
     if (arm) {
+      if (!variant || cop) {
+        form(j, 0, -0.203, 0, 0.211, 0.032, 0.247, accent);
+        form(j, 0, -0.242, 0, 0.196, 0.017, 0.23, accent);
+        box(j, s * 0.109, -0.133, 0.002, 0.014, 0.079, 0.09, seam);
+      }
       form(j, 0, -0.135, 0, 0.234, 0.37, 0.266, jacket, true);
       form(j, 0, -0.347, -0.022, 0.184, 0.25, 0.213, jacket);
       form(j, 0, -0.47, -0.022, 0.162, 0.08, 0.184, rib);
@@ -261,8 +296,64 @@ export function person(coat: string, variant = 0, cop = false) {
         ).rotation.z = n % 2 ? 0.08 : -0.08;
       form(j, 0, -0.899, -0.056, 0.247, 0.058, 0.374, sole);
     }
+    const hinge = new T.Group();
+    hinge.position.y = arm ? -0.275 : -0.437;
+    for (const mesh of [...j.children])
+      if (mesh.position.y < hinge.position.y) {
+        j.remove(mesh);
+        mesh.position.y -= hinge.position.y;
+        hinge.add(mesh);
+      }
+    j.add(hinge);
+    hinges.push(hinge);
     limbs.push(j);
   }
-  for (const joint of [g, ...limbs]) batchJoint(joint);
-  return { g, limbs };
+  for (const joint of [g, ...limbs, ...hinges]) batchJoint(joint);
+  const spine = new T.Group();
+  spine.position.y = 0.92;
+  for (const child of [...g.children]) {
+    if (child === limbs[0] || child === limbs[1]) continue;
+    g.remove(child);
+    child.position.y -= 0.92;
+    spine.add(child);
+  }
+  g.add(spine);
+  return { g, limbs, hinges, spine };
+}
+
+/** Blend poses, rather than swapping clips when a character changes speed. */
+export function gait(
+  model: ReturnType<typeof person>,
+  phase: number,
+  speed: number,
+  dt: number,
+  injury = 0,
+  running = false,
+) {
+  let blend = 1 - Math.exp(-12 * dt),
+    stride = Math.min(1, speed / 1.3),
+    run = running ? 1 : 0;
+  for (let i = 0; i < 4; i++) {
+    let arm = i > 1,
+      wave = Math.sin(phase + (i === 0 || i === 3 ? 0 : Math.PI)),
+      damaged = i === 0 || i === 3;
+    let swing =
+      wave * (0.48 + run * 0.32) * stride * (damaged ? 1 - injury * 0.12 : 1);
+    let bend = arm
+      ? 0.15 + run * 0.8 + Math.max(0, wave) * 0.28 * stride
+      : -(0.045 + Math.max(0, -wave) * (0.62 + run * 0.38) * stride);
+    if (arm && damaged) bend += injury * 0.14;
+    model.limbs[i].rotation.x += (swing - model.limbs[i].rotation.x) * blend;
+    model.hinges[i].rotation.x += (bend - model.hinges[i].rotation.x) * blend;
+  }
+  model.spine.rotation.y +=
+    (Math.cos(phase) * stride * (0.06 + 0.055 * run) - model.spine.rotation.y) *
+    blend;
+  model.spine.position.y =
+    0.92 + stride * (0.013 + run * 0.022) * Math.cos(phase * 2);
+  model.g.rotation.x +=
+    (-run * 0.09 * stride - injury * 0.08 - model.g.rotation.x) * blend;
+  model.g.rotation.z +=
+    (Math.cos(phase) * stride * 0.025 + injury * 0.025 - model.g.rotation.z) *
+    blend;
 }

@@ -78,7 +78,7 @@ export class WeaponSystem {
     if (hit) {
       let n = t.people.find((v) => v.model.g.getObjectById(hit.object.id));
       if (n) {
-        n.hp -= 35;
+        n.hurt(35, true);
         if (n.hp <= 0) this.kills++;
       }
       let v = t.cars.find((v) => v.g.getObjectById(hit.object.id));

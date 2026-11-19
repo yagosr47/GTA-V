@@ -118,20 +118,22 @@ export class Engine {
       }
     }
     this.world.step(dt);
-    this.missions.step(p, this.traffic.people, dt);
+
     if (
       p.health <= 0 ||
       p.pos.y < -8 ||
       Math.abs(p.pos.x) > 222 ||
       Math.abs(p.pos.z) > 222
     ) {
+      if (this.missions.active)
+        this.missions.cancel("Missão interrompida · volte ao início");
       if (p.car) p.exit();
       p.body.position.set(3, 1, 20);
       p.body.velocity.setZero();
       p.health = 100;
       p.armor = 75;
       this.traffic.heat = 0;
-    }
+    } else this.missions.step(p, this.traffic.people, dt);
     if (
       this.traffic.stars &&
       Math.floor(this.time * 2) !== Math.floor((this.time - dt) * 2)

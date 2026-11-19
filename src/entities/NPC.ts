@@ -1,11 +1,68 @@
 import * as T from "three";
 import { Player } from "./Player";
-import { person } from "./CharacterModel";
-import { rand } from "../utils/TextureGenerator";
+import * as C from "cannon-es";
+import { vitality } from "./Vitality";
+import { person, gait } from "./CharacterModel";
+import { rand, tex } from "../utils/TextureGenerator";
 import type { Vehicle } from "./Vehicle";
 export class NPC {
   model;
-  hp = 60;
+  hp = 100;
+  crossing = false;
+  pinned = false;
+  private fall?: C.Body;
+  private down = 0;
+  private immunity = 0;
+  private previousHp = 100;
+  private label = new T.Sprite(new T.SpriteMaterial({ depthTest: false }));
+  private bar = new T.Sprite(
+    new T.SpriteMaterial({ color: "#7ce0ac", depthTest: false }),
+  );
+  playerKill = false;
+  hurt(damage: number, byPlayer = false) {
+    if (this.hp === 0) return;
+    this.hp = Math.max(0, this.hp - Math.max(0, Math.round(damage)));
+    if (this.hp === 0) this.playerKill = byPlayer;
+  }
+  get condition() {
+    return vitality(this.hp);
+  }
+  impact(car: Vehicle, world: C.World, byPlayer = false) {
+    if (!this.hp || this.fall || this.immunity > 0) return false;
+    let p = this.model.g.position,
+      v = car.body.velocity,
+      speed = Math.hypot(v.x, v.z);
+    if (speed < 1.6 || Math.abs(p.y + 0.75 - car.body.position.y) > 1.4)
+      return false;
+    let q = car.body.pointToLocalFrame(new C.Vec3(p.x, p.y + 0.75, p.z));
+    if (Math.abs(q.x) > 1.32 || Math.abs(q.z) > 2.53) return false;
+    this.hurt(speed * 5.5, byPlayer);
+    this.down = 0.85 + Math.min(1, speed * 0.06);
+    this.fall = new C.Body({
+      mass: 65,
+      linearDamping: 0.68,
+      shape: new C.Sphere(0.34),
+      position: new C.Vec3(p.x, p.y + 0.5, p.z),
+    });
+    world.addBody(this.fall);
+    const impulse = new C.Vec3(v.x * 30, Math.min(150, speed * 11), v.z * 30);
+    this.fall.applyImpulse(impulse);
+    car.body.applyImpulse(impulse.negate());
+    return true;
+  }
+  reset(node: string) {
+    this.fall?.world?.removeBody(this.fall);
+    this.fall = undefined;
+    this.hp = 100;
+    this.playerKill = false;
+    this.node = this.next = node;
+    this.crossing = false;
+    this.rest = this.fear = this.immunity = this.down = 0;
+    this.previous = "";
+    this.model.g.rotation.set(0, 0, 0);
+    const [x, z] = node.split(",").map(Number);
+    this.model.g.position.set(x, 0.24, z);
+  }
   state = "patrol";
   node: string;
   next: string;
@@ -33,6 +90,14 @@ export class NPC {
     this.node = this.next = node;
     let [x, z] = node.split(",").map(Number);
     this.model.g.position.set(x, 0.24, z);
+    this.model.g.add(this.label);
+    this.label.position.y = 2.36;
+    this.label.scale.set(1.7, 0.265, 1);
+    this.label.visible = false;
+    this.label.raycast = this.bar.raycast = () => {};
+    this.model.g.add(this.bar);
+    this.bar.position.y = 2.18;
+    this.bar.visible = false;
     s.add(this.model.g);
   }
   step(
@@ -44,8 +109,44 @@ export class NPC {
   ) {
     const g = this.model.g,
       at = g.position;
-    g.visible = this.hp > 0;
-    if (!g.visible) return;
+    const info = this.condition;
+    this.crossing = false;
+    this.immunity -= dt;
+    const nearby = Math.hypot(at.x - p.pos.x, at.z - p.pos.z) < 16;
+    this.label.visible = nearby && this.hp < 100 && this.hp > 0;
+    if (this.label.visible && this.hp !== this.previousHp) {
+      this.previousHp = this.hp;
+      this.label.material.map?.dispose();
+      this.label.material.map = tex(256, 40, (ctx) => {
+        ctx.fillStyle = "#211c30dc";
+        ctx.fillRect(0, 0, 256, 40);
+        ctx.fillStyle = "#fff1d8";
+        ctx.textAlign = "center";
+        ctx.font = "bold 18px sans-serif";
+        ctx.fillText(`${this.hp}% · ${info.label}`, 128, 26);
+      });
+      this.label.material.needsUpdate = true;
+    }
+    this.bar.visible = this.label.visible;
+    this.bar.scale.set((0.68 * this.hp) / 100, 0.055, 1);
+    this.bar.material.color.setHSL(this.hp / 350, 0.7, 0.56);
+    if (this.fall) {
+      let f = this.fall;
+      this.state = "down";
+      at.set(f.position.x, Math.max(0.22, f.position.y - 0.12), f.position.z);
+      g.rotation.x += (-1.48 - g.rotation.x) * Math.min(1, dt * 9);
+      this.down -= dt;
+      if (this.down > 0) return;
+      f.world?.removeBody(f);
+      this.fall = undefined;
+      this.immunity = 1.1;
+    }
+    if (!this.hp) {
+      this.state = "dead";
+      g.rotation.x += (-1.49 - g.rotation.x) * Math.min(1, dt * 7);
+      at.y = 0.23;
+      return;
+    }
     let dist = Math.hypot(p.pos.x - at.x, p.pos.z - at.z);
     this.fear = alarm && dist < 35 ? 4 : Math.max(0, this.fear - dt);
     this.state = this.fear ? (this.cop ? "pursue" : "panic") : "patrol";
@@ -78,10 +179,8 @@ export class NPC {
       len = Math.hypot(dx, dz) || 1,
       speed = this.fear ? 3.6 : this.pace;
     let [nx, nz] = this.node.split(",").map(Number);
-    if (
-      Math.hypot(nx - x, nz - z) < 20 &&
-      Math.hypot(nx - at.x, nz - at.z) < 0.6
-    ) {
+    this.crossing = this.node !== this.next && Math.hypot(nx - x, nz - z) < 20;
+    if (this.crossing && Math.hypot(nx - at.x, nz - at.z) < 0.6) {
       let unsafe = cars.some((c) => {
         let pos = c.body.position,
           v = c.body.velocity;
@@ -123,6 +222,7 @@ export class NPC {
         }
       }
     }
+    speed *= info.speed;
     let step = Math.min(speed * dt, len);
     at.x += (dx / len) * step;
     at.z += (dz / len) * step;
@@ -130,13 +230,14 @@ export class NPC {
     g.rotation.y +=
       Math.atan2(Math.sin(turn), Math.cos(turn)) * Math.min(1, 9 * dt);
     this.phase += step * 3.8;
-    this.model.limbs.forEach(
-      (l, i) =>
-        (l.rotation.x =
-          this.state === "engage" && i > 1
-            ? 1.15
-            : Math.sin(this.phase + (i === 0 || i === 3 ? 0 : Math.PI)) *
-              (speed ? 0.48 : 0.03)),
+    gait(
+      this.model,
+      this.phase,
+      speed,
+      dt,
+      info.level,
+      !!this.fear && info.level < 3,
     );
+    if (this.state === "engage") this.model.limbs[3].rotation.x = 1.15;
   }
 }

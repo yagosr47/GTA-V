@@ -2,7 +2,7 @@ import * as T from "three";
 import * as C from "cannon-es";
 import { box, mat } from "../utils/TextureGenerator";
 import type { Vehicle } from "./Vehicle";
-import { person } from "./CharacterModel";
+import { person, gait } from "./CharacterModel";
 export class Player {
   model = person("#963d66");
   body = new C.Body({
@@ -32,8 +32,8 @@ export class Player {
         restitution: 0,
       }),
     );
-    this.model.limbs[3].add(this.gun);
-    this.gun.position.set(0, -0.61, 0);
+    this.model.hinges[3].add(this.gun);
+    this.gun.position.set(0, -0.335, 0);
     let steel = mat("#333242");
     box(this.gun, 0, 0, 0, 0.09, 0.14, 0.11, steel);
     this.barrel = box(this.gun, 0, -0.12, -0.03, 0.1, 0.27, 0.1, steel);
@@ -69,12 +69,7 @@ export class Player {
     if (Math.hypot(dx, dz) > 0.05)
       this.model.g.rotation.y = Math.atan2(-dx, -dz);
     this.phase += Math.hypot(v.x, v.z) * dt * 2.8;
-    this.model.limbs.forEach(
-      (l, i) =>
-        (l.rotation.x =
-          Math.sin(this.phase + (i === 0 || i === 3 ? 0 : Math.PI)) *
-          Math.min(0.7, Math.hypot(v.x, v.z) * 0.16)),
-    );
+    gait(this.model, this.phase, Math.hypot(v.x, v.z), dt, 0, sprint);
   }
   pose(aim: boolean, yaw: number, slot: number) {
     this.gun.visible = aim;
