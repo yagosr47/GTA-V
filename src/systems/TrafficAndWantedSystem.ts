@@ -1,5 +1,4 @@
-import * as T from "three";
-import { Vec3 } from "cannon-es";
+import { LaneDriver } from "./LaneDriver";
 import { Vehicle } from "../entities/Vehicle";
 import { NPC } from "../entities/NPC";
 import { CityGenerator } from "../world/CityGenerator";
@@ -10,7 +9,9 @@ export class TrafficAndWantedSystem {
   people: NPC[] = [];
   heat = 0;
   timer = 0;
-  targets = new Map<Vehicle, string>();
+  drivers: LaneDriver[] = [];
+  locks = new Map<string, LaneDriver>();
+  time = 0;
   get stars() {
     return Math.ceil(this.heat);
   }
@@ -38,90 +39,130 @@ export class TrafficAndWantedSystem {
     ] as const) {
       let v = new Vehicle(city.world, city.s, x, z, col, cop);
       this.cars.push(v);
-      this.targets.set(
-        v,
-        `${Math.round(x / 52) * 52},${Math.round(z / 52) * 52}`,
-      );
+      const routes: [number, number][][] = [
+        [
+          [0, 0],
+          [0, -52],
+          [52, -52],
+          [52, 0],
+        ],
+        [
+          [0, -52],
+          [0, 0],
+          [-52, 0],
+          [-52, -52],
+        ],
+        [
+          [-52, 0],
+          [0, 0],
+          [0, -52],
+          [-52, -52],
+        ],
+        [
+          [52, 0],
+          [52, 52],
+          [0, 52],
+          [0, 0],
+        ],
+        [
+          [0, 52],
+          [0, 0],
+          [52, 0],
+          [52, 52],
+        ],
+      ];
+      if (this.cars.length > 1)
+        this.drivers.push(
+          new LaneDriver(routes[this.cars.length - 2], v, city.roads),
+        );
     }
   }
   step(p: Player, dt: number) {
+    this.time += dt;
+    this.city.signs.update(this.time);
     this.timer -= dt;
     if (this.timer < 0) this.heat = Math.max(0, this.heat - dt * 0.09);
     for (let n of this.people) {
       let pos = n.model.g.position;
-      if (Math.hypot(pos.x - p.pos.x, pos.z - p.pos.z) > 115) {
+      if (!n.pinned && Math.hypot(pos.x - p.pos.x, pos.z - p.pos.z) > 115) {
         let keys = [...this.city.walk.keys()].filter((k) => {
           let [x, z] = k.split(",").map(Number);
           let d = Math.hypot(x - p.pos.x, z - p.pos.z);
           return d > 45 && d < 90;
         });
         if (keys.length) {
-          n.node = n.next = keys[Math.floor(rand() * keys.length)];
-          let [x, z] = n.node.split(",").map(Number);
-          pos.set(x, 0.25, z);
-          n.hp = 60;
+          n.reset(keys[Math.floor(rand() * keys.length)]);
         }
       }
+      for (const car of this.cars)
+        if (n.impact(car, this.city.world, car === p.car) && car === p.car)
+          this.crime();
       n.step(p, this.stars, dt, this.city.solid, this.cars);
     }
-    for (let car of this.cars) {
+    for (const [index, driver] of this.drivers.entries()) {
+      const car = driver.car;
       car.alert = car.police && this.stars > 0;
-      if (car === p.car || car === this.cars[0]) continue;
-      let key = this.targets.get(car)!,
-        [x, z] = key.split(",").map(Number),
-        pos = car.body.position;
-      if (pos.distanceTo(p.pos) > 140) {
-        let options = [...this.city.roads.keys()].filter((k) => {
-          let [u, v] = k.split(",").map(Number),
-            d = Math.hypot(u - p.pos.x, v - p.pos.z);
-          return d > 55 && d < 95;
-        });
-        if (options.length) {
-          key = options[Math.floor(rand() * options.length)];
-          [x, z] = key.split(",").map(Number);
-          pos.set(x + 3, 1, z);
+      if (car === p.car || car.hp <= 0) {
+        driver.retired = true;
+        driver.release(this.locks);
+      }
+      if (driver.retired) continue;
+      // Reuse distant traffic only on a free, directed approach, never at the intersection centre.
+      if (car.body.position.distanceTo(p.pos) > 145) {
+        const routes: [number, number][][] = [];
+        for (const [key, adj] of this.city.roads) {
+          const a = key.split(",").map(Number) as [number, number];
+          for (const k of adj) {
+            const b = k.split(",").map(Number) as [number, number],
+              x = (a[0] + b[0]) / 2 - ((b[1] - a[1]) / 52) * 3.5,
+              z = (a[1] + b[1]) / 2 + ((b[0] - a[0]) / 52) * 3.5,
+              d = Math.hypot(x - p.pos.x, z - p.pos.z);
+            if (
+              d < 65 ||
+              d > 90 ||
+              this.cars.some(
+                (v) =>
+                  Math.hypot(v.body.position.x - x, v.body.position.z - z) < 12,
+              ) ||
+              this.people.some(
+                (n) =>
+                  Math.hypot(
+                    n.model.g.position.x - x,
+                    n.model.g.position.z - z,
+                  ) < 6,
+              )
+            )
+              continue;
+            let next = this.city.roads.get(k)!.find((v) => v !== key)!;
+            routes.push([
+              a,
+              b,
+              next.split(",").map(Number) as [number, number],
+            ]);
+          }
+        }
+        if (routes.length) {
+          driver.release(this.locks);
           car.body.velocity.setZero();
           car.body.angularVelocity.setZero();
-          car.body.quaternion.set(0, 0, 0, 1);
-          car.body.wakeUp();
+          this.drivers[index] = new LaneDriver(
+            routes[Math.floor(rand() * routes.length)],
+            car,
+            this.city.roads,
+          );
           car.body.aabbNeedsUpdate = true;
-          car.hp = 100;
-          car.burned = false;
-          this.targets.set(car, key);
+          car.body.wakeUp();
+          continue;
         }
       }
-      if (Math.hypot(x - pos.x, z - pos.z) < 6) {
-        let opts = this.city.roads.get(key);
-        if (opts) this.targets.set(car, opts[Math.floor(rand() * opts.length)]);
-      }
-      if (car.police && this.stars) {
-        x = p.pos.x;
-        z = p.pos.z;
-      }
-      let f = car.body.vectorToWorldFrame(new Vec3(0, 0, -1)),
-        angle = Math.atan2(
-          f.z * (x - pos.x) - f.x * (z - pos.z),
-          f.x * (x - pos.x) + f.z * (z - pos.z),
-        );
-      let sensor = new T.Raycaster(
-        new T.Vector3(pos.x, pos.y, pos.z),
-        new T.Vector3(f.x, 0, f.z).normalize(),
-        0,
-        6,
-      );
-      let stop =
-        sensor.intersectObjects(this.city.solid, false).length > 0 ||
-        this.cars.some(
-          (v) =>
-            v !== car &&
-            v.body.position.distanceTo(pos) < 6 &&
-            v.body.position.vsub(pos).dot(f) > 0,
-        );
-      car.drive(
-        stop ? 0 : car.body.velocity.length() < 7 ? 0.45 : 0,
-        -angle,
-        stop ? 1 : 0,
-        false,
+
+      driver.step(
+        dt,
+        this.time,
+        this.cars,
+        this.people,
+        this.locks,
+        car.alert ? [p.pos.x, p.pos.z] : undefined,
       );
     }
   }

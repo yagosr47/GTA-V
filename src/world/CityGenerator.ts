@@ -11,7 +11,9 @@ import {
   facade,
 } from "../utils/TextureGenerator";
 import { sidewalks, inLot, WALK } from "./StreetLayout";
+import { TrafficSigns } from "./TrafficSigns";
 export class CityGenerator {
+  signs: TrafficSigns;
   solid: T.Object3D[] = [];
   roads = new Map<string, string[]>();
   walk = sidewalks();
@@ -362,6 +364,7 @@ export class CityGenerator {
       0.04,
       new T.MeshBasicMaterial({ map: marquee }),
     );
+    this.signs = new TrafficSigns(g);
     // Batch static scenery while retaining individual boxes for camera queries.
     g.updateMatrixWorld(true);
     let groups = new Map<T.Material, T.BufferGeometry[]>();
