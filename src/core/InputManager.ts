@@ -9,7 +9,10 @@ export class InputManager {
   touch = false;
   paused = false;
   constructor(public el: HTMLElement) {
+    el.tabIndex = 0;
     onkeydown = (e) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code))
+        e.preventDefault();
       if (!e.repeat) this.edge.add(e.code);
       this.keys.add(e.code);
       if (e.code === "Space") e.preventDefault();
@@ -18,6 +21,7 @@ export class InputManager {
     onblur = () => this.reset();
     el.onpointerdown = (e) => {
       if (e.pointerType === "mouse" && !this.paused) {
+        el.focus({ preventScroll: true });
         this.touch = false;
         if (document.pointerLockElement)
           this.keys.add(e.button === 2 ? "Aim" : "Fire");
@@ -59,7 +63,9 @@ export class InputManager {
       -1,
       Math.min(
         1,
-        this.ax + Number(this.keys.has("KeyD")) - Number(this.keys.has("KeyA")),
+        this.ax +
+          Number(this.keys.has("KeyD") || this.keys.has("ArrowRight")) -
+          Number(this.keys.has("KeyA") || this.keys.has("ArrowLeft")),
       ),
     );
   }
@@ -68,7 +74,9 @@ export class InputManager {
       -1,
       Math.min(
         1,
-        this.az + Number(this.keys.has("KeyW")) - Number(this.keys.has("KeyS")),
+        this.az +
+          Number(this.keys.has("KeyW") || this.keys.has("ArrowUp")) -
+          Number(this.keys.has("KeyS") || this.keys.has("ArrowDown")),
       ),
     );
   }

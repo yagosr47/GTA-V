@@ -1,6 +1,7 @@
 import * as T from "three";
 import * as C from "cannon-es";
 import { box, mat, lit } from "../utils/TextureGenerator";
+import { shell, glazing, alloy } from "./Coachwork";
 export class Vehicle {
   g = new T.Group();
   body: C.Body;
@@ -32,20 +33,65 @@ export class Vehicle {
       indexUpAxis: 1,
       indexForwardAxis: 2,
     });
-    let paint = mat(color),
-      glass = mat("#272a40"),
-      trim = mat("#201e2d");
-    box(this.g, 0, 0.04, 0, 2.18, 0.56, 4.65, paint);
-    box(this.g, 0, -0.15, 0, 2.23, 0.15, 4.73, trim);
-    box(this.g, 0, 0.35, -1.46, 2.12, 0.12, 1.55, paint);
-    let cabin = new T.Mesh(
-      new T.CylinderGeometry(1, 1.38, 0.63, 4, 1, false, Math.PI / 4),
-      glass,
+    const paint = new T.MeshStandardMaterial({
+        color,
+        metalness: 0.3,
+        roughness: 0.29,
+        flatShading: true,
+      }),
+      trim = mat("#221f2b");
+    const sedan = police || x < 0,
+      roof = sedan ? 1.07 : 0.91;
+    shell(
+      this.g,
+      [
+        [-2.34, 0.91, -0.14, 0.13, 0.92],
+        [-1.66, 1.07, -0.21, 0.31, 1.01],
+        [-0.65, 1.1, -0.19, 0.39, 1.03],
+        [1.42, 1.1, -0.19, 0.39, 1.04],
+        [2.33, 1, -0.16, 0.27, 0.99],
+      ],
+      paint,
     );
-    cabin.scale.set(1, 1, 1.42);
-    cabin.position.set(0, 0.65, 0.15);
-    this.g.add(cabin);
-    box(this.g, 0, 0.98, 0.15, 1.43, 0.1, 2.02, paint);
+    shell(
+      this.g,
+      [
+        [-1.04, 0.98, 0.33, 0.36, 0.94],
+        [-0.37, 0.97, 0.36, roof, 0.72],
+        [sedan ? 0.89 : 0.66, 0.98, 0.36, roof, 0.73],
+        [1.49, 1, 0.33, 0.37, 0.95],
+      ],
+      glazing(),
+    );
+    box(
+      this.g,
+      0,
+      roof + 0.014,
+      sedan ? 0.26 : 0.15,
+      1.48,
+      0.065,
+      sedan ? 1.29 : 1.08,
+      paint,
+    );
+    box(this.g, 0, -0.14, 2.32, 2.01, 0.14, 0.12, trim);
+    box(this.g, 0, 0.155, 2.327, 1.89, 0.14, 0.045, trim);
+    for (let side of [-1, 1]) {
+      box(this.g, side * 0.71, -0.21, 2.32, 0.28, 0.1, 0.19, mat("#b2a4a6"));
+      let pillar = box(
+        this.g,
+        side * 0.85,
+        (roof + 0.36) / 2,
+        0.24,
+        0.065,
+        roof - 0.29,
+        0.085,
+        paint,
+      );
+      pillar.rotation.z = side * 0.36;
+      box(this.g, side * 1.065, -0.135, 0.02, 0.11, 0.12, 3.6, paint);
+      if (police)
+        box(this.g, side * 1.078, 0.025, 0.03, 0.04, 0.27, 1.7, mat("#ded9d0"));
+    }
     box(this.g, 0, 0.04, 2.351, 0.49, 0.15, 0.03, lit("#f4ca91"));
     box(this.g, 0, 0.34, 1.65, 1.79, 0.025, 0.59, trim);
     box(this.g, 0, 0.5, 2, 2.15, 0.1, 0.35, paint);
@@ -69,9 +115,9 @@ export class Vehicle {
           frictionSlip: 4,
           rollInfluence: 0.04,
         });
-        let geo = new T.CylinderGeometry(0.39, 0.39, 0.28, 12);
+        let geo = new T.CylinderGeometry(0.39, 0.39, 0.28, 24);
         geo.rotateZ(Math.PI / 2);
-        let wh = new T.Mesh(geo, [trim, mat("#827a8b"), mat("#827a8b")]);
+        let wh = new T.Mesh(geo, [trim, alloy(), alloy()]);
         this.wheels.push(wh);
         s.add(wh);
       }
