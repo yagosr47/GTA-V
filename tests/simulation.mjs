@@ -35,6 +35,37 @@ try {
     assert(inLot(b.position.x, b.position.z, 2 * h.x, 2 * h.z));
   }
   const p = new Player(world, scene);
+  const { CameraController } = await vite.ssrLoadModule(
+    "/src/core/CameraController.ts",
+  );
+  const orbit = new CameraController(),
+    input = { dx: 0, dy: 0, keys: new Set() };
+  for (const aspect of [16 / 9, 9 / 16]) {
+    orbit.cam.aspect = aspect;
+    for (const [dx, dy] of [
+      [450, 900],
+      [-800, -1200],
+      [400, 1000],
+    ]) {
+      input.dx = dx;
+      input.dy = dy;
+      for (let frame = 0; frame < 55; frame++) {
+        orbit.update(p, input, city.solid, 1 / 60);
+        orbit.cam.updateMatrixWorld();
+        const pivot = new T.Vector3(p.pos.x, p.pos.y + 0.81, p.pos.z).project(
+          orbit.cam,
+        );
+        assert(
+          Math.hypot(pivot.x, pivot.y) < 1e-6,
+          "orbit must keep the torso centered at every pitch",
+        );
+        assert(
+          orbit.cam.position.y >= 0.299,
+          "camera must stay above pavement",
+        );
+      }
+    }
+  }
   function ticks(n, x, z, jump = false) {
     for (let i = 0; i < n; i++) {
       p.move(x, z, 0, jump && i === 0, false, 1 / 60);
@@ -71,7 +102,7 @@ try {
   ped.step(p, 1, 1 / 60, city.solid, []);
   assert.equal(ped.state, "panic");
   console.log(
-    "OK: idle → walking, strafing, jumping, road clearance, sidewalk links, yielding and panic",
+    "OK: centered high/low orbit (landscape and portrait), idle → walking, strafing, jumping, road clearance, sidewalk links, yielding and panic",
   );
 } finally {
   await vite.close();

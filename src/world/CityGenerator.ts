@@ -54,15 +54,15 @@ export class CityGenerator {
       new T.MeshStandardMaterial({ map: asphalt, roughnessMap: asphalt }),
     );
     this.collider(0, -1, 0, 480, 2, 480);
-    let faces = Array.from({ length: 8 }, (_, i) => {
-      let map = facade(10 + i * 2, 10);
-      return new T.MeshStandardMaterial({
-        map,
-        emissiveMap: map,
-        emissive: "#ffffff",
-        emissiveIntensity: 0.55,
-      });
-    });
+    const storeys = [2, 4, 6, 9, 13, 18];
+    const faces = storeys.map((n) => [
+      facade(n, 0),
+      facade(n, 1),
+      facade(n, 2),
+    ]);
+    const cornice = mat("#a39a97"),
+      roof = mat("#48454e"),
+      plant = mat("#817d7c");
     for (let i = -4; i < 4; i++)
       for (let j = -4; j < 4; j++) {
         let x = i * 52 + 26,
@@ -108,7 +108,87 @@ export class CityGenerator {
                     : 53),
               w = 11 + rand() * 4,
               d = 11 + rand() * 4;
-            let m = faces[Math.floor(rand() * 8)];
+            const band = storeys.reduce(
+              (best, n, k) =>
+                Math.abs(n - h / 3.1) < Math.abs(storeys[best] - h / 3.1)
+                  ? k
+                  : best,
+              0,
+            );
+            const style = Math.floor(rand() * 3),
+              m = faces[band][style];
+            // Roof coping, mechanical housings and recessed floor edges break the silhouette.
+            box(g, x + a, h + 0.53, z + b, w - 0.2, 0.28, d - 0.2, roof);
+            box(
+              g,
+              x + a + w * 0.22,
+              h + 1.05,
+              z + b - d * 0.24,
+              2.4,
+              1.05,
+              1.6,
+              plant,
+            );
+            for (let vent = 0; vent < 4; vent++)
+              box(
+                g,
+                x + a + w * 0.22,
+                h + 0.77 + vent * 0.17,
+                z + b - d * 0.24 + 0.81,
+                2.1,
+                0.07,
+                0.04,
+                steel,
+              );
+            if (style === 1) {
+              for (let floor = 1; floor < storeys[band]; floor += 2) {
+                const y = 0.24 + (h * floor) / storeys[band];
+                box(
+                  g,
+                  x + a,
+                  y,
+                  z + b + d / 2 + 0.25,
+                  w * 0.54,
+                  0.18,
+                  0.72,
+                  cornice,
+                );
+                box(
+                  g,
+                  x + a,
+                  y + 0.71,
+                  z + b + d / 2 + 0.55,
+                  w * 0.54,
+                  0.08,
+                  0.07,
+                  steel,
+                );
+                for (let k of [-1, 0, 1])
+                  box(
+                    g,
+                    x + a + k * w * 0.26,
+                    y + 0.36,
+                    z + b + d / 2 + 0.55,
+                    0.06,
+                    0.69,
+                    0.06,
+                    steel,
+                  );
+              }
+            }
+            if (style === 2) {
+              for (let side of [-1, 1])
+                box(
+                  g,
+                  x + a + side * w * 0.48,
+                  h * 0.5 + 0.24,
+                  z + b,
+                  w * 0.038,
+                  h,
+                  d + 0.16,
+                  plant,
+                );
+            }
             let o = box(g, x + a, h / 2 + 0.24, z + b, w, h, d, m);
             this.solid.push(o);
             if ((i + j) % 3 === 0) {
@@ -126,7 +206,16 @@ export class CityGenerator {
               d + 0.2,
               rand() < 0.22 ? pink : steel,
             );
-            box(g, x + a, h + 1, z + b, w * 0.66, 1.8, d * 0.75, steel);
+            box(
+              g,
+              x + a - w * 0.13,
+              h + 1.15,
+              z + b + d * 0.14,
+              w * 0.37,
+              1.5,
+              d * 0.35,
+              steel,
+            );
           }
         for (let n = -20; n <= 20; n += 5) {
           for (let l of [-0.13, 0.13]) {
